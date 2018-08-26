@@ -1,12 +1,13 @@
 
+function loadKeyboard(){
+  loadkeys pl
+}
 
-# load keyboard
-loadkeys pl
+function setNtp(){
+  timedatectl set-ntp true
+}
 
-# set time
-timedatectl set-ntp true
-
-# create MBR partitions
+function createMBRPartitions(){
 # /dev/sda1 8G    swap
 # /dev/sda2 rest  linux
 fdisk /dev/sda << EOF
@@ -17,73 +18,135 @@ p
 2048
 +8G
 t
-83
+82
 n
 p
 2
 
 
+t
+2
+83
 w 
 EOF
+}
 
-# create GPT partitions
+function createGPTPartitions(){
 # /dev/sda1 8G    swap
 # /dev/sda2 rest  linux
-#fdisk /dev/sda << EOF
-#g
-#n
-#1
-#2048
-#+8G
-#t
-#19
-#n
-#2
-#
-#
-#w 
-#EOF
+fdisk /dev/sda << EOF
+g
+n
+1
+2048
++8G
+t
+19
+n
+2
 
-# format partitions
-mkfs.ext4 /dev/sda2
 
-# create swap
-mkswap /dev/sda1
-swapon /dev/sda1
+w 
+EOF
+}
 
-# mount partitions
-mount /dev/sda2 /mnt
+function formatPartitions(){
+  mkfs.ext4 /dev/sda2
+}
 
-# install system
-pacstrap /mnt base base-devel vim grub os-prober the_silver_searcher
+function createSwap(){
+  mkswap /dev/sda1
+  swapon /dev/sda1
+}
 
-# prepare fstab
-genfstab -U /mnt >> /mnt/etc/fstab
+function mountPartitions(){
+  mount /dev/sda2 /mnt
+}
 
-# change to new enviroment
-arch-chroot /mnt
+function installSystem(){
+  pacstrap /mnt base base-devel vim grub os-prober the_silver_searcher
+}
 
-# setup time
-ln -sf /usr/share/zoneinfo/Poland /etc/localtime
-hwclock --systohc
+function prepareFstab(){
+  genfstab -U /mnt >> /mnt/etc/fstab
+}
 
-# generate locale
-printf "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-locale-gen
+function setupTime(){
+  ln -sf /usr/share/zoneinfo/Poland /etc/localtime
+  hwclock --systohc
+}
 
-# configure locale
-printf "LANG=en_US.UTF-8" > /etc/locale.conf
-printf "KEYMAP=pl" > /etc/vconsole.conf
-printf "den" > /etc/hostname
-printf "127.0.0.1 localhost\n::1 localhost\n127.0.0.1 den.shadows den\n" > /etc/hosts
+function generateLocale(){
+  printf "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+  locale-gen
+}
 
-# set default password for root
-printf "root\nroot" | passwd
+function configureLocale(){
+  printf "LANG=en_US.UTF-8" > /etc/locale.conf
+  printf "KEYMAP=pl" > /etc/vconsole.conf
+  printf "den" > /etc/hostname
+  printf "127.0.0.1 localhost\n::1 localhost\n127.0.0.1 den.shadows den\n" > /etc/hosts
+}
 
-# install bootloader
-grub-install --target=i386-pc /dev/sda
-grub-mkconfig -o /boot/grub/grub.cfg
+function setRootPassword(){
+  printf "root\nroot" | passwd
+}
 
-# exit new enviroment
-exit
-umount -R /mnt
+function installBootloader(){
+  grub-install --target=i386-pc /dev/sda
+  grub-mkconfig -o /boot/grub/grub.cfg
+}
+
+function changeToChroot()
+{
+  arch-chroot /mnt
+}
+
+function umountAll(){
+  umount -R /mnt
+}
+
+function preChroot(){
+  loadKeyboard
+  setNtp
+  createMBRPartitions
+  formatPartitions
+  createSwap
+  mountPartitions
+  installSystem
+  prepareFstab
+}
+
+function inChroot()
+{
+  setupTime
+  generateLocale
+  configureLocale
+  setRootPassword
+  installBootloader
+}
+
+function main()
+{
+  if [ $1 = "full" ]; then 
+  	preChroot
+  	changeToChroot
+  	exit
+  	inChroot
+  	umountAll
+  fi
+
+  if [ $1 = "pre" ]; then 
+  	preChroot
+  fi
+
+  if [ $1 = "in" ]; then 
+  	inChroot
+  fi
+
+  if [ $1 = "chroot" ]; then 
+  	changeToChroot
+  fi
+}
+
+main "$@"
