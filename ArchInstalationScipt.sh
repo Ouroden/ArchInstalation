@@ -106,7 +106,16 @@ function umountAll(){
   umount -R /mnt
 }
 
-function preChroot(){
+function removeScriptCopy(){
+  rm /mnt/$0
+}
+
+function runScriptInsideChroot(){
+  cp $0 /mnt/$0
+  arch-chroot /mnt $0 chroot
+}
+
+function runOperationsBeforeChroot(){
   loadKeyboard
   setNtp
   createMBRPartitions
@@ -117,8 +126,7 @@ function preChroot(){
   prepareFstab
 }
 
-function inChroot()
-{
+function runOperationsInsideChroot(){
   setupTime
   generateLocale
   configureLocale
@@ -126,27 +134,18 @@ function inChroot()
   installBootloader
 }
 
-function main()
-{
-  if [ $1 = "full" ]; then 
-  	preChroot
-  	changeToChroot
-  	exit
-  	inChroot
+function runOperationsAfterChroot(){
+	removeScriptCopy
   	umountAll
-  fi
+}
 
-  if [ $1 = "pre" ]; then 
-  	preChroot
-  fi
+main()
+{
+  if [[ $1 = "chroot" ]]; then runOperationsInsideChroot; exit 0; fi 
 
-  if [ $1 = "in" ]; then 
-  	inChroot
-  fi
-
-  if [ $1 = "chroot" ]; then 
-  	changeToChroot
-  fi
+  runOperationsBeforeChroot
+  runScriptInsideChroot
+  runOperationsAfterChroot
 }
 
 main "$@"
