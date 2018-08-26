@@ -6,23 +6,43 @@ loadkeys pl
 # set time
 timedatectl set-ntp true
 
-# create partitions
+# create MBR partitions
 # /dev/sda1 8G    swap
 # /dev/sda2 rest  linux
 fdisk /dev/sda << EOF
 o
 n
+p
 1
 2048
 +8G
 t
-19
+83
 n
+p
 2
 
 
 w 
 EOF
+
+# create GPT partitions
+# /dev/sda1 8G    swap
+# /dev/sda2 rest  linux
+#fdisk /dev/sda << EOF
+#g
+#n
+#1
+#2048
+#+8G
+#t
+#19
+#n
+#2
+#
+#
+#w 
+#EOF
 
 # format partitions
 mkfs.ext4 /dev/sda2
