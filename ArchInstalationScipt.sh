@@ -64,7 +64,7 @@ function mountPartitions(){
 }
 
 function installSystem(){
-  pacstrap /mnt base base-devel vim grub os-prober the_silver_searcher
+  pacstrap /mnt base base-devel vim grub os-prober the_silver_searcher zsh zsh-completions git
 }
 
 function prepareFstab(){
@@ -92,7 +92,7 @@ function setRootPassword(){
   printf "root\nroot" | passwd
 }
 
-function installBootloader(){
+function installBootloaderForMBR(){
   grub-install --target=i386-pc /dev/sda
   grub-mkconfig -o /boot/grub/grub.cfg
 }
@@ -131,7 +131,7 @@ function runOperationsInsideChroot(){
   generateLocale
   configureLocale
   setRootPassword
-  installBootloader
+  installBootloaderForMBR
 }
 
 function runOperationsAfterChroot(){
@@ -139,13 +139,70 @@ function runOperationsAfterChroot(){
   	umountAll
 }
 
+function setupWiredConnection(){
+  interface=$(ls /sys/class/net -I lo)
+  ip link set ${interface} up
+  systemctl enable dhcpcd
+  dhcpcd ${interface}	
+}
+
+function createUser(){
+  user=$1
+  useradd -m -G wheel -s /usr/bin/zsh $1
+  printf "$1\n$1" | passwd $1
+}
+
+function enableSudo(){
+  echo '%wheel ALL=(ALL) ALL' | EDITOR='tee -a' visudo
+}
+
+function enableProxy(){
+  echo 'Defaults env_keep += "EDITOR PROXY http_proxy HTTP_PROXY https_proxy HTTPS_PROXY ftp_proxy FTP_PROXY rsync_proxy RSYNC_PROXY"' | EDITOR='tee -a' visudo
+}
+
+function createProxyFile(){
+  proxy=http://defra1c-proxy.emea.nsn-net.net:8080
+  proxyFile=/etc/profile.d/proxy.sh
+
+  printf "default=$proxy\n" > proxyFile
+  printf "export PROXY=$default\n" >> proxyFile
+  printf "export http_proxy=$PROXY\nexport HTTP_PROXY=$PROXY\n" >> proxyFile
+  printf "export https_proxy=$PROXY\nexport HTTPS_PROXY=$PROXY\n" >> proxyFile
+  printf "export ftp_proxy=$PROXY\nexport FTP_PROXY=$PROXY\n" >> proxyFile
+  printf "export rsync_proxy=$PROXY\nexport RSYNC_PROXY=$PROXY\n" >> proxyFile
+}
+
+function installVMPlugins(){
+  pacman -S --noconfirm virtualbox-guest-utils <<< '2'
+  systemctl enable vboxservice
+  systemctl start vboxservice
+  #printf "VBoxClient-all" >> ??? # run after startx
+}
+
+function runOperationsAfterReboot(){
+  setupWiredConnection
+  createUser "ouro"
+  enableSudo
+  createProxyFile 
+  enableProxy
+  installVMPlugins
+}
+
 main()
 {
   if [[ $1 = "chroot" ]]; then runOperationsInsideChroot; exit 0; fi 
 
-  runOperationsBeforeChroot
-  runScriptInsideChroot
-  runOperationsAfterChroot
+  if [[ $1 = "basic" ]]; then
+    runOperationsBeforeChroot
+    runScriptInsideChroot
+    runOperationsAfterChroot
+    printf "Basic installation finished successfully.\n"
+    printf "Please reboot and eject CD.\n"
+    printf "After reboot please run this script with: \'$0 post\' to configure system\n"
+  fi
+
+  if [[ $1 = "post" ]]; then runOperationsAfterReboot; exit 0; fi 
+
 }
 
 main "$@"
